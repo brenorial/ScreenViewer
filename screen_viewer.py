@@ -2,30 +2,36 @@ import mss
 import mss.tools
 import customtkinter as ctk
 from PIL import Image, ImageTk
+import tkinter as tk
 
-class ScreenViewerApp(ctk.CTk):
+class SelectionWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Visualização em tempo real das telas")
-        self.geometry("1400x800")
+        # Definir o tema para preto
+        ctk.set_appearance_mode("dark")
+
+        self.title("Seleção de Monitores")
+        self.geometry("600x300")
 
         self.sct = mss.mss()
         self.monitors = self.sct.monitors
-
-        self.selected_monitors = []
 
         self.monitor_vars = [ctk.IntVar() for _ in self.monitors[1:]]
 
         self.create_widgets()
 
     def create_widgets(self):
+        # Frame para os checkbuttons
         self.checkbuttons_frame = ctk.CTkFrame(self)
-        self.checkbuttons_frame.pack(pady=10)
+        self.checkbuttons_frame.pack(pady=10, fill="x")  
+
+        self.checkbuttons_inner_frame = ctk.CTkFrame(self.checkbuttons_frame)
+        self.checkbuttons_inner_frame.pack(padx=10, pady=10, side="left", expand=True) 
 
         for i, monitor in enumerate(self.monitors[1:], start=1):
-            cb = ctk.CTkCheckBox(self.checkbuttons_frame, text=f'Monitor {i}', variable=self.monitor_vars[i-1])
-            cb.pack(anchor="w")
+            cb = ctk.CTkCheckBox(self.checkbuttons_inner_frame, text=f'Monitor {i}', variable=self.monitor_vars[i-1])
+            cb.pack(anchor="w", pady=5) 
 
         self.play_button = ctk.CTkButton(self, text="Play", command=self.start_viewing)
         self.play_button.pack(pady=10)
@@ -36,14 +42,38 @@ class ScreenViewerApp(ctk.CTk):
         if not self.selected_monitors:
             ctk.CTkMessagebox.show_warning(title="Aviso", message="Selecione pelo menos um monitor para visualizar.")
             return
+        
+        self.destroy()
 
+        app = ScreenViewerWindow(self.selected_monitors)
+        app.mainloop()
+
+class ScreenViewerWindow(ctk.CTk):
+    def __init__(self, selected_monitors):
+        super().__init__()
+
+        ctk.set_appearance_mode("dark")
+
+        self.title("Visualização em Tempo Real das Telas")
+        self.geometry("1200x600")  
+
+        self.sct = mss.mss()
+        self.selected_monitors = selected_monitors
+
+        self.create_widgets()
+
+    def create_widgets(self):
         self.viewer_frame = ctk.CTkFrame(self)
-        self.viewer_frame.pack(pady=10)
+        self.viewer_frame.pack(pady=10, fill="both", expand=True)
 
         self.canvases = []
-        for monitor in self.selected_monitors:
-            canvas = ctk.CTkCanvas(self.viewer_frame, width=1280, height=720)
-            canvas.pack(side="left", padx=10)
+        num_monitors = len(self.selected_monitors)
+
+        for i, monitor in enumerate(self.selected_monitors):
+            canvas_width = (self.winfo_width() - 20 * (num_monitors - 1)) // num_monitors 
+            canvas_height = self.winfo_height() - 60
+            canvas = ctk.CTkCanvas(self.viewer_frame, width=canvas_width, height=canvas_height, bg='black')
+            canvas.pack(side="left", padx=10, pady=10, fill="both", expand=True)
             self.canvases.append(canvas)
 
         self.update_images()
@@ -52,13 +82,17 @@ class ScreenViewerApp(ctk.CTk):
         for canvas, monitor in zip(self.canvases, self.selected_monitors):
             screenshot = self.sct.grab(monitor)
             img = Image.frombytes('RGB', screenshot.size, screenshot.rgb)
-            img.thumbnail((1280, 720))
+
+            canvas_width = canvas.winfo_width()
+            canvas_height = canvas.winfo_height()
+            img.thumbnail((canvas_width, canvas_height))
             imgtk = ImageTk.PhotoImage(image=img)
+
             canvas.imgtk = imgtk
             canvas.create_image(0, 0, anchor="nw", image=imgtk)
 
         self.after(100, self.update_images)
 
 if __name__ == "__main__":
-    app = ScreenViewerApp()
-    app.mainloop() 
+    app = SelectionWindow()
+    app.mainloop()
